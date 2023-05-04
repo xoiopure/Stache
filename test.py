@@ -7,7 +7,7 @@ import timeit
 import subprocess
 
 def verify(output, template, data):
-    print("%s with %s" % (template, data))
+    print(f"{template} with {data}")
     result = render(template, data)
     result_iter = ''.join(Stache().render_iter(template, data))
     print("Result: %s\n" % result)
@@ -17,39 +17,47 @@ def verify(output, template, data):
 def verify_js(output, template, data):
     import json
     script = render_js(template)
-    print("%s with %s" % (template, data))
+    print(f"{template} with {data}")
     result = subprocess.check_output(["node", "-e", "console.log({0}({1}))".format(script,  json.dumps(data))]).strip()
     print("Result: %s\n" % result)
     assert output.lower() == result
 
 def verify_partial(stachio, output, template, data={}):
-    print("%s with %s" % (template, data))
+    print(f"{template} with {data}")
     result = stachio.render_template(template, data)
     print("Result: %s\n" % result)
     assert output == result
 
 def verify_js_partial(stachio, output, template, data={}):
     import json
-    print("%s with %s" % (template, data))
+    print(f"{template} with {data}")
     script = stachio.render_js_template(template)
     result = subprocess.check_output(["node", "-e", "console.log({0}({1}))".format(script,  json.dumps(data))]).strip()
     print("Result: %s\n" % result)
     assert output.lower() == result
 
 def bench(output, template, data):
-    t = timeit.Timer("render('%s', %s)" % (template, data), "from __main__ import render")
+    t = timeit.Timer(
+        f"render('{template}', {data})", "from __main__ import render"
+    )
     print("%.2f\tusec/test > python %s with %s" % (1000000 * t.timeit(number=10000)/10000, template, data))
 
 def bench_js(output, template, data):
-    t = timeit.Timer("render_js('%s')" % (template), "from __main__ import render_js")
+    t = timeit.Timer(f"render_js('{template}')", "from __main__ import render_js")
     print("%.2f\tusec/test > js %s with %s" % (1000000 * t.timeit(number=10000)/10000, template, data))
 
 def bench_partial(stachio, output, template, data={}):
-    t = timeit.Timer("s.render_template('%s', %s)" % (template, data),  "from __main__ import test_partials, s")
+    t = timeit.Timer(
+        f"s.render_template('{template}', {data})",
+        "from __main__ import test_partials, s",
+    )
     print("%.2f\tusec/test > python partial %s with %s" % (1000000 * t.timeit(number=10000)/10000, template, data))
 
 def bench_js_partial(stachio, output, template, data={}):
-    t = timeit.Timer("s.render_template('%s', %s)" % (template, data),  "from __main__ import test_partials, s")
+    t = timeit.Timer(
+        f"s.render_template('{template}', {data})",
+        "from __main__ import test_partials, s",
+    )
     print("%.2f\tusec/test > js_partial %s with %s" % (1000000 * t.timeit(number=10000)/10000, template, data))
 
 def bare(output, template, data):
@@ -86,7 +94,7 @@ def test(method=bare):
     yield method, 'a- 1 2 3 4', 'a{{?b}}-{{#b}} {{.}}{{/}}{{/}}', dict(b=[1,2,3,4])
     yield method, 'a', 'a{{?b}}ignoreme{{/}}', dict(b=False)
     yield method, 'a', 'a{{?b}}ignoreme{{/}}', dict(b=[])
-    yield method, 'a', 'a{{?b}}ignoreme{{/}}', dict()
+    yield (method, 'a', 'a{{?b}}ignoreme{{/}}', {})
     yield method, 'abb', 'a{{?b}}b{{/}}{{?b}}b{{/}}', dict(b=[1,2,3])
     yield method, 'ab123d', 'a{{?b}}b{{#b}}{{.}}{{/}}d{{/}}', dict(b=[1,2,3])
     #test #section scope
@@ -106,12 +114,12 @@ def test(method=bare):
     #test :
     yield method, '123test', '123{{:hi}}abc{{/}}', dict(hi='test')
     yield method, '123test', '123{{:hi}}{{:hi}}abc{{/}}{{/}}', dict(hi='test')
-    yield method, '123abc', '123{{:hi}}{{:hi2}}abc{{/}}{{/}}', dict()
+    yield (method, '123abc', '123{{:hi}}{{:hi2}}abc{{/}}{{/}}', {})
     yield method, '123cba', '123{{:hi}}{{:hi2}}abc{{/}}{{/}}', dict(hi2='cba')
-    yield method, '123abc', '123{{:hi}}abc{{/}}', dict()
+    yield (method, '123abc', '123{{:hi}}abc{{/}}', {})
     yield method, '123abc', '123{{:hi}}abc{{/}}', dict(hi=False)
     yield method, '123abc', '123{{:hi}}abc{{/}}', dict(hi=[])
-    yield method, '123test', '{{<hi}}test{{/}}123{{:hi}}abc{{/}}', dict()
+    yield (method, '123test', '{{<hi}}test{{/}}123{{:hi}}abc{{/}}', {})
     #iterators
     yield method, '0123456789', '{{#a}}{{.}}{{/a}}', dict(a=range(10))
     yield method, '02468', '{{#a}}{{.}}{{/a}}', dict(a=list(filter(lambda x: x%2==0, range(10))))
@@ -138,18 +146,18 @@ s.add_template('n', 'a{{?b}}b{{/}}{{?b}}b{{/}}')
 s.add_template('o', 'a{{?b}}b{{#b}}{{.}}{{/}}d{{/}}')
 
 def test_partials(method=bare_partial):
-    yield method, s, '1', 'a', dict()
-    yield method, s, '1', 'b', dict()
-    yield method, s, '11', 'c', dict()
-    yield method, s, '', 'd', dict()
+    yield (method, s, '1', 'a', {})
+    yield (method, s, '1', 'b', {})
+    yield (method, s, '11', 'c', {})
+    yield (method, s, '', 'd', {})
     yield method, s, '555', 'd', dict(a={'b':555})
     yield method, s, '123', 'g', dict(a={})
     yield method, s, '555', 'e', dict(a={'b':555})
     yield method, s, '555', 'f', dict(a={'b':555})
-    yield method, s, 'i=123', 'h', dict()
-    yield method, s, 'i=', 'i', dict()
-    yield method, s, 'showme', 'j', dict()
-    yield method, s, 'default', 'k', dict()
+    yield (method, s, 'i=123', 'h', {})
+    yield (method, s, 'i=', 'i', {})
+    yield (method, s, 'showme', 'j', {})
+    yield (method, s, 'default', 'k', {})
     yield method, s, 'custom', 'k', dict(e="custom")
     yield method, s, '<3><3><3>', 'l', {'id':3,'a':True, 'b':True}
     yield method, s, '<3><3><3>', 'm', {'id':3,'a?':True, 'b?':True}
@@ -158,8 +166,6 @@ def test_partials(method=bare_partial):
 
 def test_js(method=verify_js):
     return
-    for x in test(method):
-        yield x
 
 def null(*args, **kwargs):
     return
@@ -176,15 +182,6 @@ def run(method=bare, method_partial=bare_partial, method_js=bare_js, method_js_p
 
 def test_js_all():
     return
-    expected = []
-    script = 't = ('
-    script += s.render_all_js()
-    script += ')();\n'
-    for x in test_partials():
-        script += "console.log(t['{1}']([{2}]));\n".format(x[2], x[3], json.dumps(x[4]))
-        expected.append(x[2])
-    res = subprocess.check_output(["node", "-e", script]).split('\n')[:-1]
-    assert res == expected
 
 if __name__ == '__main__':
     
