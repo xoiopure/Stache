@@ -187,10 +187,9 @@ class Stache(object):
         if self.hoist:
             for name in self.hoist:
                 hoist += '  var {0} = {1};\n'.format(name, self.hoist[name])
-        if bare:
-            if self.hoist_data:
-                for name in self.hoist_data:
-                    hoist += '  {2}["{0}"] = {1};\n'.format(name, self.hoist_data[name], "data")
+        if bare and self.hoist_data:
+            for name in self.hoist_data:
+                hoist += '  {2}["{0}"] = {1};\n'.format(name, self.hoist_data[name], "data")
 
         return hoist
 
@@ -225,16 +224,20 @@ class Stache(object):
             taglabel, rest = rest.split(self.ctag, 1) if rest else (None, None)
             taglabel       = taglabel.strip() if taglabel else ''
             open_tag       = _checkprefix(taglabel, '#')
-            invert_tag     = _checkprefix(taglabel, '^') if not open_tag else None
-            close_tag      = _checkprefix(taglabel, '/') if not invert_tag else None
-            comment_tag    = _checkprefix(taglabel, '!') if not close_tag else None
-            partial_tag    = _checkprefix(taglabel, '>') if not comment_tag else None
-            push_tag       = _checkprefix(taglabel, '<') if not partial_tag else None
-            bool_tag       = _checkprefix(taglabel, '?') if not push_tag else None
-            booltern_tag   = _checkprefix(taglabel, ':') if not bool_tag else None
-            unescape_tag   = _checkprefix(taglabel, '{') if not booltern_tag else None
+            invert_tag = None if open_tag else _checkprefix(taglabel, '^')
+            close_tag = None if invert_tag else _checkprefix(taglabel, '/')
+            comment_tag = None if close_tag else _checkprefix(taglabel, '!')
+            partial_tag = None if comment_tag else _checkprefix(taglabel, '>')
+            push_tag = None if partial_tag else _checkprefix(taglabel, '<')
+            bool_tag = None if push_tag else _checkprefix(taglabel, '?')
+            booltern_tag = None if bool_tag else _checkprefix(taglabel, ':')
+            unescape_tag = None if booltern_tag else _checkprefix(taglabel, '{')
             rest           = rest[1:] if unescape_tag else rest
-            unescape_tag   = (unescape_tag or _checkprefix(taglabel, '&')) if not booltern_tag else None
+            unescape_tag = (
+                None
+                if booltern_tag
+                else (unescape_tag or _checkprefix(taglabel, '&'))
+            )
             delim_tag      = taglabel[1:-1] if not unescape_tag and len(taglabel) >= 2 and taglabel[0] == '=' and taglabel[-1] == '=' else None
             delim_tag      = delim_tag.split(' ', 1) if delim_tag else None
             delim_tag      = delim_tag if delim_tag and len(delim_tag) == 2 else None
@@ -300,18 +303,17 @@ class Stache(object):
                             yield str(tagvalue)
                         else:
                             yield escape(str(tagvalue))
-            elif tag == TOKEN_TAGOPEN or tag == TOKEN_TAGINVERT:
+            elif tag in [TOKEN_TAGOPEN, TOKEN_TAGINVERT]:
                 tagvalue = _lookup(data, content)
                 untilclose = itertools.takewhile(lambda x: x != (TOKEN_TAGCLOSE, content, scope), tokens)
                 if (tag == TOKEN_TAGOPEN and tagvalue) or (tag == TOKEN_TAGINVERT and not tagvalue):
                     if hasattr(tagvalue, 'items'):
                         #print '    its a dict!', tagvalue, untilclose
-                        for part in self._parse(untilclose, tagvalue, *data):
-                            yield part
+                        yield from self._parse(untilclose, tagvalue, *data)
                     else:
                         try:
                             iterlist = list(iter(tagvalue))
-                            if len(iterlist) == 0:
+                            if not iterlist:
                                 raise TypeError
                             #print '    its a list!', list(rest)
                             #from http://docs.python.org/library/itertools.html#itertools.tee
@@ -319,28 +321,18 @@ class Stache(object):
                             #another iterator starts, it is faster to use list() instead of tee().
                             rest = list(untilclose)
                             for listitem in iterlist:
-                                for part in self._parse(iter(rest), listitem, *data):
-                                    yield part
+                                yield from self._parse(iter(rest), listitem, *data)
                         except TypeError:
                             #print '    its a bool!'
-                            for part in self._parse(untilclose, *data):
-                                yield part
-                else:
-                    for ignore in untilclose:
-                        pass
+                            yield from self._parse(untilclose, *data)
             elif tag == TOKEN_BOOL:
                 tagvalue = _lookup(data, content)
                 untilclose = itertools.takewhile(lambda x: x != (TOKEN_TAGCLOSE, content, scope), tokens)
                 if tagvalue:
-                    for part in self._parse(untilclose, *data):
-                        yield part
-                else:
-                    for part in untilclose:
-                        pass
+                    yield from self._parse(untilclose, *data)
             elif tag == TOKEN_PARTIAL:
                 if content in self.templates:
-                    for part in self._parse(iter(list(self.templates[content])), *data):
-                        yield part
+                    yield from self._parse(iter(list(self.templates[content])), *data)
             elif tag == TOKEN_PUSH:
                 untilclose = itertools.takewhile(lambda x: x != (TOKEN_TAGCLOSE, content, scope), tokens)
                 data[-1][content] = ''.join(self._parse(untilclose, *data))
@@ -360,7 +352,7 @@ class Stache(object):
                         yield "lookup(data, '{0}')".format(content)
                     else:
                         yield "htmlEncode(lookup(data, '{0}'))".format(content)
-            elif tag == TOKEN_TAGOPEN or tag == TOKEN_TAGINVERT or tag == TOKEN_BOOL:
+            elif tag in [TOKEN_TAGOPEN, TOKEN_TAGINVERT, TOKEN_BOOL]:
                 untilclose = itertools.takewhile(lambda x: x != (TOKEN_TAGCLOSE, content, scope), tokens)
                 inside = self._jsparse(untilclose)
                 if tag == TOKEN_TAGOPEN:
